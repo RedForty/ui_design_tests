@@ -4,9 +4,11 @@ import maya.OpenMayaUI as omui
 from maya import cmds, mel
 import math
 
-
 from Qt import QtGui, QtCore, QtWidgets, QtCompat # pylint:disable=E0611
 
+from ui_design_tests.push_button import SuperButton
+
+import KlugTools # DELETE FOR DEPLOY
 
 # =========================================================================== #
 # Globals from KlugTools.ui_design_tests.floating_control import Interface_Test as ui_tool
@@ -20,8 +22,6 @@ RANGE_COLOR  = (150, 150, 150) # RGB
 CTRL_COLOR   = (  0, 255,  50)
 ALT_COLOR    = ( 80, 190, 255)
 SHIFT_COLOR  = (255,  80, 200)
-
-
 
 STICKY_RANGE = 5
 
@@ -127,20 +127,16 @@ class UI_Event_Filter(QtCore.QObject):
                     self._parent.cursor_start_position = QtGui.QCursor.pos()
                 elif sticky_distance < STICKY_RANGE and self._parent.sticky_start == False:
                     print sticky_distance
-                if self._parent.sticky_start: # and self._parent.is_activated == False:
+                if self._parent.sticky_start:
                     self._parent.activate()
             else:
                 self._parent.sticky_start = False
 
-        if event.type() == QtCore.QEvent.ApplicationStateChange: # Better than focusLost
+        if event.type() == QtCore.QEvent.ApplicationStateChange:
             self._parent.clicks = [0, 0, 0]
             self._parent.modifiers = [0, 0, 0]
-            # self._parent.left_mouse_down = False
-            # self._parent.right_mouse_down = False
-            # self._parent.middle_mouse_down = False
             self._parent.stop()
             print 'Maya focus lost! Aborting!'
-            # return True # Can't actually prevent focus out with this
 
         return QtCore.QObject.eventFilter(self, obj, event)
 
@@ -215,7 +211,8 @@ class Interface_Test(QtWidgets.QWidget):
         self.setLayout(self.LYT_main)
         self.LYT_main.setContentsMargins(0,0,0,0)
         self.LYT_main.setSpacing(0)
-        self.BTN_main = QtWidgets.QPushButton()
+        # self.BTN_main = QtWidgets.QPushButton()
+        self.BTN_main = SuperButton(self)
         self.BTN_main.setObjectName('BTN_main')
         self.BTN_main.setText(self.feedback_text)
         self.BTN_main.setSizePolicy(
@@ -238,10 +235,32 @@ class Interface_Test(QtWidgets.QWidget):
                     font: normal normal bold 40px/normal Impact, Charcoal, sans-serif;
                 }""")
 
-
         self.update_widget_position()
         self.GE_Draw.show()
         self.Timeline_Draw.show()
+        self.init_connections()
+
+    def _explodeButton(self):
+        self.BTN_main.show()
+        self.BTN_main.explodeButton()
+
+    def _explodeComplete(self, value):
+        # self.activeButton.setText(self.activeButton_text)
+        self.BTN_main.setText("DONE")
+        self.BTN_main.hide()
+        self.update()
+        # print self.activeButton_text
+
+    def _update_progress_bar(self, value):
+        self.BTN_main._progressEnabled = True
+        progressChunkCurrent = value / 500.0
+        self.BTN_main.progressBarChunk = progressChunkCurrent
+        # self.BTN_main.show()
+        # self.BTN_main.raise_()
+        self.update()
+
+    def init_connections(self):
+        self.BTN_main.explodeComplete.connect(self._explodeComplete)
 
     def install_event_filters(self):
         QtWidgets.QApplication.instance().installEventFilter(self.ui_event_filter)
@@ -317,6 +336,11 @@ class Interface_Test(QtWidgets.QWidget):
         self.update_widget_position()
         self.feedback_text = self.cursor_start_position.x() - QtGui.QCursor.pos().x()
         self.BTN_main.setText(str(self.feedback_text))
+        self._update_progress_bar(self.feedback_text)
+        self.update()
+        QtWidgets.QApplication.processEvents()
+        if self.feedback_text > 500:
+            self._explodeButton()
 
         # End of main operation --------------------------------------------- #
         # =~---------------------------------------------------------------~= #
