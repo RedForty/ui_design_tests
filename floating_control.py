@@ -341,6 +341,7 @@ class Interface_Test(QtWidgets.QWidget):
         QtWidgets.QApplication.processEvents()
         if self.feedback_text > 500:
             self._explodeButton()
+        # DO THE OPERATION WITH self.feedback_text
 
         # End of main operation --------------------------------------------- #
         # =~---------------------------------------------------------------~= #
