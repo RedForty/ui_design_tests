@@ -4,17 +4,19 @@
 from Qt import QtWidgets, QtGui, QtCompat # pylint:disable=E0611
 import maya.OpenMaya as om
 import maya.OpenMayaUI as omui
-from maya import cmds
+from maya import cmds, mel
 
 
 # =+-----------------------------------------------------------------------+= #
 # Public Class
 
-class GE_Overlay(QtWidgets.QWidget):
+class Timeline_Overlay(QtWidgets.QWidget):
     def __init__(self, frame_times=[0.0], active_color=(150, 150, 150, 100)):
-        self.ge_widget = self._get_graphEditor()
-        if self.ge_widget:
-            super(GE_Overlay, self).__init__(self.ge_widget)
+
+        self.time_control_widget = self._get_time_widget()
+
+        if self.time_control_widget:
+            super(Timeline_Overlay, self).__init__(self.time_control_widget)
         else:
             self.close()
             self.deleteLater()
@@ -31,13 +33,12 @@ class GE_Overlay(QtWidgets.QWidget):
     # ----------------------------------------------------------------------- #
     # Private methods
 
-    def _get_graphEditor(self):
-        try:
-            widget = omui.MQtUtil.findControl('graphEditor1GraphEdImpl')
-            return QtCompat.wrapInstance(long(widget), QtWidgets.QWidget)
-        except TypeError:
-            cmds.error('No GraphEditor found!')
-            return None
+    def _get_time_widget(self):
+        widget = omui.MQtUtil.findControl(self._get_time_control())
+        return QtCompat.wrapInstance(long(widget), QtWidgets.QWidget)
+
+    def _get_time_control(self):
+        return mel.eval('$tmpVar = $gPlayBackSlider')
 
     def _clamp(self, n, smallest, largest):
         return max(smallest, min(n, largest))
@@ -100,32 +101,15 @@ class GE_Overlay(QtWidgets.QWidget):
         if parent:
             # --------------------------------------------------------------- #
             # Basic frame geometry stuff
-            self.setGeometry(parent.geometry())
+            self.setGeometry(parent.geometry()) # Make it the same size
 
-            frame_width  = self.ge_widget.frameSize().width()
-            frame_height = self.ge_widget.frameSize().height()
+            range_start = cmds.playbackOptions(query=True, minTime=True)
+            range_end   = cmds.playbackOptions(query=True, maxTime=True)
+            displayed_frame_count = range_end - range_start + 1
 
-            # Get initial frame range of GE panel
-            # Taken from the maya docs for MGraphEditorInfo()
-            leftSu=om.MScriptUtil(0.0)
-            leftPtr=leftSu.asDoublePtr()
-            rightSu=om.MScriptUtil(0.0)
-            rightPtr=rightSu.asDoublePtr()
-            bottomSu=om.MScriptUtil(0.0)
-            bottomPtr=bottomSu.asDoublePtr()
-            topSu=om.MScriptUtil(0.0)
-            topPtr=topSu.asDoublePtr()
-
-            omui.MGraphEditorInfo().getViewportBounds(leftPtr,
-                                                      rightPtr,
-                                                      bottomPtr,
-                                                      topPtr)
-
-            ge_left_frame = om.MScriptUtil(leftPtr).asDouble()
-            ge_right_frame = om.MScriptUtil(rightPtr).asDouble()
-
-            # Distance in numbers of frames visible in the widget
-            total_visible_frames = ge_right_frame - ge_left_frame # It floats!
+            height = self.parent().height()
+            padding = self.width() * 0.005
+            frame_width = (self.width() * 0.99) / displayed_frame_count
 
             # --------------------------------------------------------------- #
             # Painter widgets
@@ -142,26 +126,24 @@ class GE_Overlay(QtWidgets.QWidget):
             pen.setColor(pen_color)
             painter.setPen(pen)
 
+            # --------------------------------------------------------------- #
+            # Can support individual frames with groups, etc..
             for frame_group in list(self._group(self.frame_times)):
-                # Start frame calculated against the width of the frame
-                ratio_left_side = (frame_group[0] - ge_left_frame)\
-                                   / total_visible_frames
-                left_side_geometry = ratio_left_side * frame_width
 
-                # End frame calculated against the width of the frame
-                ratio_right_side = (frame_group[-1] - ge_left_frame + 1)\
-                                    / total_visible_frames
-                right_side_geometry = ratio_right_side * frame_width
+                range_frame_times = max(frame_group) - min(frame_group) + 1
+                start_frame = frame_group[0]
+                start_width = frame_width * (start_frame-range_start) + 1
+                end_width = frame_width * range_frame_times
 
-                painter.fillRect(left_side_geometry,
-                                 0, # From the top
-                                 right_side_geometry-left_side_geometry,
-                                 frame_height, # To the bottom
+                painter.fillRect(padding + start_width,
+                                 0,
+                                 end_width-2,
+                                 height,
                                  fill_color)
-                painter.drawRect(left_side_geometry,
-                                 -1, # Watch out for stroke thickness
-                                 right_side_geometry-left_side_geometry,
-                                 frame_height+2)
+                painter.drawRect(padding + start_width,
+                                 1, # Watch out for stroke thickness
+                                 end_width-2,
+                                 height-2)
 
 
 # =+----------------------------------------------------------------------+= #
@@ -174,7 +156,7 @@ if __name__ == '__main__':
     except:
         pass
 
-    test_ui = GE_Overlay()
+    test_ui = Timeline_Overlay()
     test_ui.set_frames([[-10,20],25,39,40,[50,100]])
     test_ui.set_color([60,100,160])
     test_ui.set_alpha(100)
